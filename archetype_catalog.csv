@@ -1,0 +1,2 @@
+"Alias","ArchetypeGroupId","ArchetypeArtifactId","ArchetypeVersion","ArchetypeCatalog","ExtraParams","Descripcion"
+"Quarkus Empresa","com.empresa.archetype","quarkus-service-archetype","1.0.0","","","Arquetipo Quarkus de la compania"
