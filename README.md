@@ -1,6 +1,6 @@
-# Scripts de Administración y Optimización para Windows 11
+# Scripts de Gestión de Entornos - Windows 11
 
-Colección de scripts PowerShell para gestión de entornos de desarrollo (Java, Maven, Kafka) y optimización del sistema en Windows 11.
+Colección de scripts PowerShell para gestión de entornos de desarrollo (Java, Maven, Kafka) en Windows 11.
 
 ---
 
@@ -48,114 +48,31 @@ Gestor interactivo de Apache Kafka en modo KRaft (sin Zookeeper). Abre servidor,
 - Propaga `JAVA_HOME` a las ventanas hijas via `-EncodedCommand`
 - Usa `Get-CimInstance` en lugar de `wmic` (compatible con Windows 11)
 
-### `quarkus_manager.ps1`
-
-Generador de proyectos Quarkus usando arquetipos Maven corporativos. La configuración del arquetipo se define en CSV y el usuario solo introduce los datos del proyecto.
-
-| Opción | Función                     |
-| ------ | --------------------------- |
-| 1      | Crear nuevo proyecto        |
-| 2      | Ver arquetipos configurados |
-
-- Configuración via CSV: `archetype_catalog.csv`
-- Detecta Maven automáticamente desde `M2_HOME` o `PATH`; si no lo encuentra ofrece seleccionar desde `maven_paths.csv`
-- Pide solo: `groupId`, `artifactId`, `version` y `package`
-- Permite elegir directorio destino (crea la carpeta si no existe)
-- Muestra resumen y comando completo antes de ejecutar
-- Soporta parámetros extra del arquetipo via columna `ExtraParams` (separados por `;`)
-
 ### Archivos CSV
 
-| Archivo                 | Columnas                                                                                                   | Propósito                        |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| `java_paths.csv`        | Alias, JavaHome, Descripcion                                                                               | Rutas a instalaciones de JDK     |
-| `maven_paths.csv`       | Alias, MavenHome, Descripcion                                                                              | Rutas a instalaciones de Maven   |
-| `kafka_paths.csv`       | Alias, KafkaHome, Descripcion                                                                              | Rutas a instalaciones de Kafka   |
-| `archetype_catalog.csv` | Alias, ArchetypeGroupId, ArchetypeArtifactId, ArchetypeVersion, ArchetypeCatalog, ExtraParams, Descripcion | Arquetipos Maven para generación |
-
----
-
-## Scripts de Optimización
-
-> **Requisito:** Ejecutar como **Administrador**.
-
-### `optimizar_desactivar.ps1`
-
-Desactiva servicios innecesarios agrupados por categoría:
-
-| Categoría             | Servicios                                                    |
-| --------------------- | ------------------------------------------------------------ |
-| Telemetría Microsoft  | DiagTrack, InventorySvc, whesvc                              |
-| Telemetría SQL Server | SQLTELEMETRY, SSISTELEMETRY170                               |
-| Telemetría Intel      | dptftcs                                                      |
-| Rendimiento           | SysMain (Superfetch)                                         |
-| Innecesarios          | TrkWks, MapsBroker, DoSvc                                    |
-| ASUS bloatware        | ArmouryCrateService, LightingService, ROG Live Service, etc. |
-
-Detiene los servicios activos, los desactiva vía registro (`Start = 4`) y `Set-Service`.
-
-### `optimizar_reactivar.ps1`
-
-Restaura todos los servicios desactivados por `optimizar_desactivar.ps1` a su tipo de inicio **Automático** y los inicia.
-
-### `limpieza_optimizacion.ps1`
-
-Limpieza profunda del sistema:
-
-- Archivos temporales de usuario (`%TEMP%`) y de Windows
-- Prefetch y minidumps
-- Descargas de Windows Update
-- Cache de miniaturas y DNS
-- Papelera de reciclaje
-- Logs de eventos (Application, System, Security, Setup)
-- Cache de Windows Store y Microsoft Edge
-- Optimización de disco (TRIM en SSD / desfragmentación en HDD)
-
-Muestra un resumen con el espacio total liberado al finalizar.
-
-### `disable_services.ps1` / `disable_services_admin.ps1`
-
-Versiones anteriores/simplificadas del script de desactivación de servicios. Misma lista de servicios pero sin etiquetas descriptivas ni modificación de registro.
-
-### `services_list.csv`
-
-Exportación CSV de todos los servicios del sistema con nombre, nombre visible, estado y tipo de inicio. Útil como referencia antes de hacer cambios.
+| Archivo           | Columnas                              | Propósito                    |
+| ----------------- | ------------------------------------- | ---------------------------- |
+| `java_paths.csv`  | Alias, JavaHome, Descripcion          | Rutas a instalaciones de JDK |
+| `maven_paths.csv` | Alias, MavenHome, Descripcion         | Rutas a instalaciones Maven  |
+| `kafka_paths.csv` | Alias, KafkaHome, Descripcion         | Rutas a instalaciones Kafka  |
 
 ---
 
 ## Uso
 
 ```powershell
-# Gestores (no requieren admin)
+# Gestores de entorno (no requieren admin)
 .\java_manager.ps1
 .\kafka_manager.ps1
-.\quarkus_manager.ps1
-
-# Optimización (requiere admin)
-.\optimizar_desactivar.ps1
-.\optimizar_reactivar.ps1
-.\limpieza_optimizacion.ps1
 ```
 
 ## Estructura
 
 ```
-├── java_manager.ps1          # Gestor de Java/Maven/Certificados
-├── java_paths.csv             # Config JDKs
-├── maven_paths.csv            # Config Maven
-├── cert/                      # Certificados a instalar (.cer, .crt, .pem)
-├── kafka_manager.ps1          # Gestor de Kafka
-├── kafka_paths.csv            # Config Kafka
-├── quarkus_manager.ps1        # Generador de proyectos Quarkus
-├── archetype_catalog.csv      # Config arquetipos Maven
-├── optimizar_desactivar.ps1   # Desactivar servicios
-├── optimizar_reactivar.ps1    # Reactivar servicios
-├── limpieza_optimizacion.ps1  # Limpieza del sistema
-├── disable_services.ps1       # Desactivar servicios (simple)
-├── disable_services_admin.ps1 # Desactivar servicios (admin)
-└── services_list.csv          # Lista de servicios del sistema
+├── java_manager.ps1     # Gestor de Java/Maven/Certificados
+├── java_paths.csv       # Config JDKs
+├── maven_paths.csv      # Config Maven
+├── cert/                # Certificados a instalar (.cer, .crt, .pem)
+├── kafka_manager.ps1    # Gestor de Kafka
+└── kafka_paths.csv      # Config Kafka
 ```
-
-## Advertencia
-
-Los scripts de optimización modifican configuraciones del sistema. Revisa la lista de servicios antes de ejecutar y asegúrate de que no necesitas ninguno de ellos. Usa `optimizar_reactivar.ps1` para revertir los cambios si es necesario.

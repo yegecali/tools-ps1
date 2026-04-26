@@ -68,26 +68,21 @@ function Show-JDKs {
     Write-Host ""
     Write-Host "  JAVA_HOME actual: " -NoNewline -ForegroundColor DarkGray
     if ($current) { Write-Host $current -ForegroundColor Yellow }
-    else {
-        Write-Host "(no definido)" -ForegroundColor Red
-        Write-Host ""
-        $configurar = Read-Host "  JAVA_HOME no esta definido. Deseas configurarlo ahora? (s/n) [s]"
-        if ($configurar -ne "n") {
-            Set-JavaVersion -SkipList
-            return
-        }
-    }
+    else { Write-Host "(no definido)" -ForegroundColor Red }
     Write-Host ""
 }
 
 # ── Cambiar JAVA_HOME y PATH ─────────────────
 function Set-JavaVersion {
-    param([switch]$SkipList)
-    if (-not $SkipList) { Show-JDKs }
+    Show-JDKs
     $sel = Read-Host "  Selecciona numero de JDK (0 = cancelar)"
     if ($sel -eq "0" -or -not $sel) { return }
 
-    $idx = [int]$sel - 1
+    if (-not [int]::TryParse($sel, [ref]$idx)) {
+        Write-Err "Entrada inválida, ingresa un número."
+        return
+    }
+    $idx--
     if ($idx -lt 0 -or $idx -ge $jdks.Count) {
         Write-Err "Seleccion invalida."
         return
@@ -202,7 +197,11 @@ function Set-MavenVersion {
     $sel = Read-Host "  Selecciona numero de Maven (0 = cancelar)"
     if ($sel -eq "0" -or -not $sel) { return }
 
-    $idx = [int]$sel - 1
+    if (-not [int]::TryParse($sel, [ref]$idx)) {
+        Write-Err "Entrada inválida, ingresa un número."
+        return
+    }
+    $idx--
     if ($idx -lt 0 -or $idx -ge $mavens.Count) {
         Write-Err "Seleccion invalida."
         return
@@ -275,7 +274,11 @@ function Select-JDK($prompt) {
     Show-JDKs
     $sel = Read-Host "  $prompt (0 = cancelar)"
     if ($sel -eq "0" -or -not $sel) { return $null }
-    $idx = [int]$sel - 1
+    if (-not [int]::TryParse($sel, [ref]$idx)) {
+        Write-Err "Entrada inválida, ingresa un número."
+        return $null
+    }
+    $idx--
     if ($idx -lt 0 -or $idx -ge $jdks.Count) {
         Write-Err "Seleccion invalida."
         return $null
@@ -436,6 +439,19 @@ function Remove-Certificate {
 # ── Menu principal ────────────────────────────
 while ($true) {
     Write-Title "GESTOR DE JAVA Y MAVEN"
+
+    if (-not $env:JAVA_HOME) {
+        Write-Host ""
+        Write-Err "JAVA_HOME no esta definido."
+        $configurar = Read-Host "  Deseas configurarlo ahora? (s/n) [s]"
+        if ($configurar -ne "n") {
+            Set-JavaVersion
+            Write-Host ""
+            Read-Host "Presiona Enter para continuar"
+            continue
+        }
+    }
+
     Write-Host ""
     Write-Host "  ---- Java ----" -ForegroundColor DarkGray
     Write-Host "  1) Ver JDKs disponibles" -ForegroundColor White

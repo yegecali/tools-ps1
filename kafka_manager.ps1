@@ -105,7 +105,8 @@ function Assert-Java {
             Write-Host ""
             $sel = Read-Host "  Selecciona JDK para esta sesion"
             if ($sel -eq "0" -or -not $sel) { return $false }
-            $idx = [int]$sel - 1
+            if (-not [int]::TryParse($sel, [ref]$idx)) { Write-Err "Entrada inválida, ingresa un número."; return $false }
+            $idx--
             if ($idx -lt 0 -or $idx -ge $jdks.Count) { Write-Err "Seleccion invalida."; return $false }
             $jdk = $jdks[$idx]
             $env:JAVA_HOME = $jdk.JavaHome
@@ -161,7 +162,11 @@ function Select-Kafka {
     $sel = Read-Host "  Numero (0 = cancelar)"
     if ($sel -eq "0" -or -not $sel) { return $null }
 
-    $idx = [int]$sel - 1
+    if (-not [int]::TryParse($sel, [ref]$idx)) {
+        Write-Err "Entrada inválida, ingresa un número."
+        return $null
+    }
+    $idx--
     if ($idx -lt 0 -or $idx -ge $kafkas.Count) {
         Write-Err "Seleccion invalida."
         return $null
@@ -192,18 +197,16 @@ function Get-KafkaOrSelect {
     return Select-Kafka $titulo
 }
 
-function Get-BinDir($kafka) {
-    return Join-Path $kafka.KafkaHome "bin\windows"
-}
-
-function Get-ShortBinDir($kafka) {
-    # Setear KAFKA_LOG4J_OPTS con URI correcto para evitar el error de Log4j2 reconfiguration
+function Set-KafkaLog4j($kafka) {
     if (-not $env:KAFKA_LOG4J_OPTS) {
         $logConfig = Join-Path $kafka.KafkaHome "config\tools-log4j2.yaml"
         if (Test-Path $logConfig) {
             $env:KAFKA_LOG4J_OPTS = "-Dlog4j2.configurationFile=$(([System.Uri]::new($logConfig)).AbsoluteUri)"
         }
     }
+}
+
+function Get-ShortBinDir($kafka) {
     $short = Mount-KafkaDrive $kafka.KafkaHome
     return Join-Path $short "bin\windows"
 }
@@ -244,6 +247,7 @@ function Start-KafkaServer {
     }
 
     # Montar drive corto para evitar "input line is too long"
+    Set-KafkaLog4j $kafka
     $shortBin = Get-ShortBinDir $kafka
     $shortHome = if ($script:substDrive) { "$($script:substDrive):" } else { $kafkaHome }
     $kraftConfig = $kraftConfigOrig -replace [regex]::Escape($kafkaHome), $shortHome
@@ -295,24 +299,22 @@ function Stop-KafkaServer {
     $kafka = Get-KafkaOrSelect "Selecciona Kafka para detener"
     if (-not $kafka) { return }
 
-    Write-Info "Buscando procesos de Kafka..."
-    $kafkaProcs = Get-Process -Name "java" -ErrorAction SilentlyContinue | Where-Object {
-        try {
-            $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)" -ErrorAction SilentlyContinue).CommandLine
-            $cmdLine -and $cmdLine -match "kafka"
-        } catch { $false }
+    $kafkaReal = $kafka.KafkaHome
+    Write-Info "Buscando procesos de Kafka para: $kafkaReal"
+    $kafkaProcs = Get-CimInstance Win32_Process | Where-Object {
+        $_.Name -eq "java.exe" -and $_.CommandLine -like "*$kafkaReal*"
     }
 
     if (-not $kafkaProcs -or $kafkaProcs.Count -eq 0) {
-        Write-Err "No se encontraron procesos de Kafka ejecutandose."
+        Write-Err "No se encontraron procesos de Kafka para este directorio."
         return
     }
 
     foreach ($proc in $kafkaProcs) {
-        $cmd = "Stop-Process -Id $($proc.Id) -Force"
+        $cmd = "Stop-Process -Id $($proc.ProcessId) -Force"
         Write-Cmd $cmd
-        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-        Write-OK "Proceso Kafka (PID $($proc.Id)) detenido."
+        Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+        Write-OK "Proceso Kafka (PID $($proc.ProcessId)) detenido."
     }
 }
 
@@ -323,6 +325,7 @@ function New-KafkaTopic {
     $kafka = Get-KafkaOrSelect "Selecciona Kafka"
     if (-not $kafka) { return }
 
+    Set-KafkaLog4j $kafka
     $shortBin = Get-ShortBinDir $kafka
     $topicsScript = Join-Path $shortBin "kafka-topics.bat"
     if (-not (Test-Path $topicsScript)) { Write-Err "kafka-topics.bat no encontrado"; return }
@@ -356,6 +359,7 @@ function Show-KafkaTopics {
     $kafka = Get-KafkaOrSelect "Selecciona Kafka"
     if (-not $kafka) { return }
 
+    Set-KafkaLog4j $kafka
     $shortBin = Get-ShortBinDir $kafka
     $topicsScript = Join-Path $shortBin "kafka-topics.bat"
     if (-not (Test-Path $topicsScript)) { Write-Err "kafka-topics.bat no encontrado"; return }
@@ -376,6 +380,7 @@ function Describe-KafkaTopic {
     $kafka = Get-KafkaOrSelect "Selecciona Kafka"
     if (-not $kafka) { return }
 
+    Set-KafkaLog4j $kafka
     $shortBin = Get-ShortBinDir $kafka
     $topicsScript = Join-Path $shortBin "kafka-topics.bat"
     if (-not (Test-Path $topicsScript)) { Write-Err "kafka-topics.bat no encontrado"; return }
@@ -398,6 +403,7 @@ function Remove-KafkaTopic {
     $kafka = Get-KafkaOrSelect "Selecciona Kafka"
     if (-not $kafka) { return }
 
+    Set-KafkaLog4j $kafka
     $shortBin = Get-ShortBinDir $kafka
     $topicsScript = Join-Path $shortBin "kafka-topics.bat"
     if (-not (Test-Path $topicsScript)) { Write-Err "kafka-topics.bat no encontrado"; return }
@@ -428,6 +434,7 @@ function Open-KafkaProducer {
     $kafka = Get-KafkaOrSelect "Selecciona Kafka"
     if (-not $kafka) { return }
 
+    Set-KafkaLog4j $kafka
     $shortBin = Get-ShortBinDir $kafka
     $producerScript = Join-Path $shortBin "kafka-console-producer.bat"
     if (-not (Test-Path $producerScript)) { Write-Err "kafka-console-producer.bat no encontrado"; return }
@@ -451,6 +458,7 @@ function Open-KafkaConsumer {
     $kafka = Get-KafkaOrSelect "Selecciona Kafka"
     if (-not $kafka) { return }
 
+    Set-KafkaLog4j $kafka
     $shortBin = Get-ShortBinDir $kafka
     $consumerScript = Join-Path $shortBin "kafka-console-consumer.bat"
     if (-not (Test-Path $consumerScript)) { Write-Err "kafka-console-consumer.bat no encontrado"; return }
@@ -462,14 +470,14 @@ function Open-KafkaConsumer {
     $fromBeginning = Read-Host "  Leer desde el inicio? (s/n) [n]"
     $groupId = Read-Host "  Consumer group (dejar vacio para ninguno)"
 
-    $args = "--topic $topicName --bootstrap-server $bs"
-    if ($fromBeginning -eq "s") { $args += " --from-beginning" }
-    if ($groupId) { $args += " --group $groupId" }
+    $consumerArgs = "--topic $topicName --bootstrap-server $bs"
+    if ($fromBeginning -eq "s") { $consumerArgs += " --from-beginning" }
+    if ($groupId) { $consumerArgs += " --group $groupId" }
 
-    $cmd = "$consumerScript $args"
+    $cmd = "$consumerScript $consumerArgs"
     Write-Cmd $cmd
     Write-Info "Abriendo consumidor en nueva ventana..."
-    Start-PsWindow -Title "Kafka Consumer [$topicName]" -Script "& '$consumerScript' $args"
+    Start-PsWindow -Title "Kafka Consumer [$topicName]" -Script "& '$consumerScript' $consumerArgs"
     Dismount-KafkaDrive
     Write-OK "Consumidor abierto para topico '$topicName'."
 }
@@ -481,11 +489,10 @@ function Show-ConsumerGroups {
     $kafka = Get-KafkaOrSelect "Selecciona Kafka"
     if (-not $kafka) { return }
 
+    Set-KafkaLog4j $kafka
     $shortBin = Get-ShortBinDir $kafka
     $groupsScript = Join-Path $shortBin "kafka-consumer-groups.bat"
     if (-not (Test-Path $groupsScript)) { Write-Err "kafka-consumer-groups.bat no encontrado"; return }
-
-    $bs = Ask-BootstrapServer
 
     Write-Host ""
     Write-Host "  1) Listar consumer groups" -ForegroundColor White
@@ -497,12 +504,14 @@ function Show-ConsumerGroups {
 
     switch ($op) {
         "1" {
+            $bs = Ask-BootstrapServer
             $cmd = "$groupsScript --list --bootstrap-server $bs"
             Write-Cmd $cmd
             Write-Host ""
             & $groupsScript --list --bootstrap-server $bs | Out-Host
         }
         "2" {
+            $bs = Ask-BootstrapServer
             $groupId = Read-Host "  Nombre del consumer group"
             if (-not $groupId) { Write-Err "El nombre es obligatorio."; return }
             $cmd = "$groupsScript --describe --group $groupId --bootstrap-server $bs"
@@ -511,6 +520,7 @@ function Show-ConsumerGroups {
             & $groupsScript --describe --group $groupId --bootstrap-server $bs | Out-Host
         }
         "3" {
+            $bs = Ask-BootstrapServer
             $groupId = Read-Host "  Nombre del consumer group"
             if (-not $groupId) { Write-Err "El nombre es obligatorio."; return }
             $topicName = Read-Host "  Topico (o --all-topics)"
